@@ -9,6 +9,7 @@ fn main() {
         .add_startup_system(spawn_player)
         .add_system(movement)
         .add_system(animation)
+        .add_system(follow_player)
         .add_system(bevy::input::system::exit_on_esc_system)
         .add_plugins(DefaultPlugins)
         .run()
@@ -17,7 +18,6 @@ fn main() {
 fn setup(mut commands: Commands) {
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 }
-
 fn spawn_player(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -50,17 +50,14 @@ fn animation(
     keyboard_input: Res<Input<KeyCode>>,
 ) {
     for (mut timer, mut sprite, texture_atlas_handle) in query.iter_mut() {
-        if keyboard_input.any_pressed([
-            KeyCode::W,
-            KeyCode::A,
-            KeyCode::S,
-            KeyCode::D,
-            KeyCode::Up,
-            KeyCode::Left,
-            KeyCode::Down,
-            KeyCode::Right,
-        ]) {
+        if keyboard_input.pressed(KeyCode::W)
+            || keyboard_input.pressed(KeyCode::A)
+            || keyboard_input.pressed(KeyCode::S)
+            || keyboard_input.pressed(KeyCode::D)
+        {
             timer.tick(time.delta());
+        } else {
+            sprite.index = 0;
         }
         if timer.finished() {
             let texture_atlas = texture_atlases.get(&*texture_atlas_handle).unwrap();
@@ -71,22 +68,39 @@ fn animation(
 
 fn movement(
     keyboard_input: Res<Input<KeyCode>>,
-    mut head_positions: Query<&mut Transform, With<Player>>,
+    mut player_positions: Query<&mut Transform, With<Player>>,
 ) {
-    for mut transform in head_positions.iter_mut() {
-        if keyboard_input.pressed(KeyCode::Left) || keyboard_input.pressed(KeyCode::A) {
+    for mut transform in player_positions.iter_mut() {
+        if keyboard_input.pressed(KeyCode::A) {
             transform.translation.x -= 2.;
             transform.rotation = Quat::from_rotation_y(std::f32::consts::PI);
         }
-        if keyboard_input.pressed(KeyCode::Right) || keyboard_input.pressed(KeyCode::D) {
+        if keyboard_input.pressed(KeyCode::D) {
             transform.translation.x += 2.;
             transform.rotation = Quat::default();
         }
-        if keyboard_input.pressed(KeyCode::Down) || keyboard_input.pressed(KeyCode::S) {
+        if keyboard_input.pressed(KeyCode::S) {
             transform.translation.y -= 2.;
         }
-        if keyboard_input.pressed(KeyCode::Up) || keyboard_input.pressed(KeyCode::W) {
+        if keyboard_input.pressed(KeyCode::W) {
             transform.translation.y += 2.;
         }
     }
+}
+
+fn follow_player(
+    player_positions: Query<&Transform, With<Player>>,
+    mut camera_positions: Query<&mut Transform, (With<Camera>, Without<Player>)>,
+) {
+    let mut camera = camera_positions.single_mut();
+    let player = player_positions.single();
+    if distance_to(camera.translation.truncate(), player.translation.truncate()) > 100.0 {
+        camera.translation = player.translation;
+    }
+}
+
+fn distance_to(point1: Vec2, point2: Vec2) -> f32 {
+    let squared: f32 = ((point1.x - point2.x) * (point1.x - point2.x))
+        + ((point1.y - point2.y) * (point1.y - point2.y));
+    return squared.sqrt();
 }
