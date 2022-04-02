@@ -3,6 +3,8 @@ use bevy::prelude::*;
 #[derive(Component)]
 struct Player;
 
+const PLAYER_SPEED: f32 = 5.0;
+
 fn main() {
     App::new()
         .add_startup_system(setup)
@@ -72,18 +74,50 @@ fn movement(
 ) {
     for mut transform in player_positions.iter_mut() {
         if keyboard_input.pressed(KeyCode::A) {
-            transform.translation.x -= 2.;
+            let move_to = move_towards(
+                transform.translation.truncate(),
+                Vec2::new(
+                    transform.translation.x - PLAYER_SPEED,
+                    transform.translation.y,
+                ),
+                1.0,
+            );
+            transform.translation = move_to.extend(0.0);
             transform.rotation = Quat::from_rotation_y(std::f32::consts::PI);
         }
         if keyboard_input.pressed(KeyCode::D) {
-            transform.translation.x += 2.;
+            let move_to = move_towards(
+                transform.translation.truncate(),
+                Vec2::new(
+                    transform.translation.x + PLAYER_SPEED,
+                    transform.translation.y,
+                ),
+                1.0,
+            );
+            transform.translation = move_to.extend(0.0);
             transform.rotation = Quat::default();
         }
         if keyboard_input.pressed(KeyCode::S) {
-            transform.translation.y -= 2.;
+            let move_to = move_towards(
+                transform.translation.truncate(),
+                Vec2::new(
+                    transform.translation.x,
+                    transform.translation.y - PLAYER_SPEED,
+                ),
+                1.0,
+            );
+            transform.translation = move_to.extend(0.0);
         }
         if keyboard_input.pressed(KeyCode::W) {
-            transform.translation.y += 2.;
+            let move_to = move_towards(
+                transform.translation.truncate(),
+                Vec2::new(
+                    transform.translation.x,
+                    transform.translation.y + PLAYER_SPEED,
+                ),
+                1.0,
+            );
+            transform.translation = move_to.extend(0.0);
         }
     }
 }
@@ -103,4 +137,11 @@ fn distance_to(point1: Vec2, point2: Vec2) -> f32 {
     let squared: f32 = ((point1.x - point2.x) * (point1.x - point2.x))
         + ((point1.y - point2.y) * (point1.y - point2.y));
     return squared.sqrt();
+}
+
+fn move_towards(a: Vec2, b: Vec2, distance: f32) -> Vec2 {
+    let vector = Vec2::new(b.x - a.x, b.y - a.y);
+    let length: f32 = (vector.x * vector.x + vector.y * vector.y).sqrt();
+    let unit_vector = Vec2::new(vector.x / length, vector.y / length);
+    return Vec2::new(a.x + unit_vector.x * 2.0, a.y + unit_vector.y * distance);
 }
