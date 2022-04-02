@@ -59,7 +59,7 @@ fn animation(
             KeyCode::Left,
             KeyCode::Down,
             KeyCode::Right,
-]) {
+        ]) {
             timer.tick(time.delta());
         }
         if timer.finished() {
