@@ -1,15 +1,33 @@
 use bevy::prelude::*;
-use bevy_ecs_tilemap::prelude::*;
+use bevy::sprite::collide_aabb::*;
 
 mod texture;
 
 #[derive(Component)]
 struct Player;
 
+#[derive(Component)]
+struct Background;
+
 const PLAYER_SPEED: f32 = 5.0;
+
+struct Moveable {
+    down: bool,
+    up: bool,
+    left: bool,
+    right: bool,
+}
+
+static mut MOVEABLE: Moveable = Moveable {
+    down: true,
+    up: true,
+    left: true,
+    right: true,
+};
 
 fn main() {
     App::new()
+        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .add_startup_system(setup)
         .add_startup_system(spawn_player)
         .add_system(movement)
@@ -18,11 +36,17 @@ fn main() {
         .add_system(bevy::input::system::exit_on_esc_system)
         .add_system(texture::set_texture_filters_to_nearest)
         .add_plugins(DefaultPlugins)
-        .add_plugin(TilemapPlugin)
         .run()
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let background_image: Handle<Image> = asset_server.load("Untitled.png");
+    commands
+        .spawn_bundle(SpriteBundle {
+            texture: background_image.into(),
+            ..Default::default()
+        })
+        .insert(Background);
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 }
 fn spawn_player(
@@ -42,8 +66,8 @@ fn spawn_player(
             },
             ..Default::default()
         })
-        .insert(Player)
         .insert(Transform::from_xyz(0.0, 0.0, 1.0))
+        .insert(Player)
         .insert(Timer::from_seconds(0.1, true));
 }
 
@@ -79,51 +103,25 @@ fn movement(
     mut player_positions: Query<&mut Transform, With<Player>>,
 ) {
     for mut transform in player_positions.iter_mut() {
-        if keyboard_input.pressed(KeyCode::A) {
-            let move_to = move_towards(
-                transform.translation.truncate(),
-                Vec2::new(
-                    transform.translation.x - PLAYER_SPEED,
-                    transform.translation.y,
-                ),
-                1.0,
-            );
-            transform.translation = move_to.extend(1.0);
-            transform.rotation = Quat::from_rotation_y(std::f32::consts::PI);
-        }
-        if keyboard_input.pressed(KeyCode::D) {
-            let move_to = move_towards(
-                transform.translation.truncate(),
-                Vec2::new(
-                    transform.translation.x + PLAYER_SPEED,
-                    transform.translation.y,
-                ),
-                1.0,
-            );
-            transform.translation = move_to.extend(1.0);
-            transform.rotation = Quat::default();
-        }
-        if keyboard_input.pressed(KeyCode::S) {
-            let move_to = move_towards(
-                transform.translation.truncate(),
-                Vec2::new(
-                    transform.translation.x,
-                    transform.translation.y - PLAYER_SPEED,
-                ),
-                1.0,
-            );
-            transform.translation = move_to.extend(1.0);
-        }
-        if keyboard_input.pressed(KeyCode::W) {
-            let move_to = move_towards(
-                transform.translation.truncate(),
-                Vec2::new(
-                    transform.translation.x,
-                    transform.translation.y + PLAYER_SPEED,
-                ),
-                1.0,
-            );
-            transform.translation = move_to.extend(1.0);
+        unsafe {
+            if keyboard_input.pressed(KeyCode::A) && MOVEABLE.left {
+                println!("({}, {})", transform.translation.x, transform.translation.y);
+                transform.translation.x -= PLAYER_SPEED;
+                transform.rotation = Quat::from_rotation_y(std::f32::consts::PI);
+            }
+            if keyboard_input.pressed(KeyCode::D) && MOVEABLE.right {
+                println!("({}, {})", transform.translation.x, transform.translation.y);
+                transform.translation.x += PLAYER_SPEED;
+                transform.rotation = Quat::default();
+            }
+            if keyboard_input.pressed(KeyCode::S) && MOVEABLE.down {
+                println!("({}, {})", transform.translation.x, transform.translation.y);
+                transform.translation.y -= PLAYER_SPEED;
+            }
+            if keyboard_input.pressed(KeyCode::W) && MOVEABLE.up {
+                println!("({}, {})", transform.translation.x, transform.translation.y);
+                transform.translation.y += PLAYER_SPEED;
+            }
         }
     }
 }
@@ -134,7 +132,29 @@ fn follow_player(
 ) {
     let mut camera = camera_positions.single_mut();
     let player = player_positions.single();
-    if distance_to(camera.translation.truncate(), player.translation.truncate()) > 100.0 {
+    unsafe {
+        if player.translation.x > 650.0 {
+            MOVEABLE.right = false;
+        } else {
+            MOVEABLE.right = true;
+        }
+        if player.translation.x < -650.0 {
+            MOVEABLE.left = false;
+        } else {
+            MOVEABLE.left = true;
+        }
+        if player.translation.y > 370.0 {
+            MOVEABLE.up = false;
+        } else {
+            MOVEABLE.up = true;
+        }
+        if player.translation.y < -370.0 {
+            MOVEABLE.down = false;
+        } else {
+            MOVEABLE.down = true;
+        }
+    }
+    if distance_to(camera.translation.truncate(), player.translation.truncate()) > 300.0 {
         camera.translation = player.translation;
     }
 }
@@ -143,11 +163,4 @@ fn distance_to(point1: Vec2, point2: Vec2) -> f32 {
     let squared: f32 = ((point1.x - point2.x) * (point1.x - point2.x))
         + ((point1.y - point2.y) * (point1.y - point2.y));
     return squared.sqrt();
-}
-
-fn move_towards(a: Vec2, b: Vec2, distance: f32) -> Vec2 {
-    let vector = Vec2::new(b.x - a.x, b.y - a.y);
-    let length: f32 = (vector.x * vector.x + vector.y * vector.y).sqrt();
-    let unit_vector = Vec2::new(vector.x / length, vector.y / length);
-    return Vec2::new(a.x + unit_vector.x * 2.0, a.y + unit_vector.y * distance);
 }
