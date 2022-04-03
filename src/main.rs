@@ -16,41 +16,13 @@ fn main() {
         .add_system(animation)
         .add_system(follow_player)
         .add_system(bevy::input::system::exit_on_esc_system)
+        .add_system(texture::set_texture_filters_to_nearest)
         .add_plugins(DefaultPlugins)
         .add_plugin(TilemapPlugin)
         .run()
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut map_query: MapQuery) {
-    let texture_handle = asset_server.load("tiles.png");
-
-    let map_entity = commands.spawn().id();
-    let mut map = Map::new(0u16, map_entity);
-
-    let (mut layer_builder, _) = LayerBuilder::new(
-        &mut commands,
-        LayerSettings::new(
-            MapSize(16, 16),
-            ChunkSize(8, 8),
-            TileSize(16.0, 16.0),
-            TextureSize(144.0, 144.0),
-        ),
-        0u16,
-        0u16,
-    );
-
-    layer_builder.set_all(TileBundle::default());
-
-    let layer_entity = map_query.build_layer(&mut commands, layer_builder, texture_handle);
-
-    map.add_layer(&mut commands, 0u16, layer_entity);
-
-    commands
-        .entity(map_entity)
-        .insert(map)
-        .insert(Transform::from_xyz(-128.0, -128.0, 0.0))
-        .insert(GlobalTransform::default());
-
+fn setup(mut commands: Commands) {
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 }
 fn spawn_player(
@@ -65,12 +37,13 @@ fn spawn_player(
         .spawn_bundle(SpriteSheetBundle {
             texture_atlas: texture_atlas_handle,
             transform: Transform {
-                scale: Vec3::new(2., 2., 2.),
+                scale: Vec3::new(4., 4., 0.),
                 ..Default::default()
             },
             ..Default::default()
         })
         .insert(Player)
+        .insert(Transform::from_xyz(0.0, 0.0, 1.0))
         .insert(Timer::from_seconds(0.1, true));
 }
 
@@ -115,7 +88,7 @@ fn movement(
                 ),
                 1.0,
             );
-            transform.translation = move_to.extend(0.0);
+            transform.translation = move_to.extend(1.0);
             transform.rotation = Quat::from_rotation_y(std::f32::consts::PI);
         }
         if keyboard_input.pressed(KeyCode::D) {
@@ -127,7 +100,7 @@ fn movement(
                 ),
                 1.0,
             );
-            transform.translation = move_to.extend(0.0);
+            transform.translation = move_to.extend(1.0);
             transform.rotation = Quat::default();
         }
         if keyboard_input.pressed(KeyCode::S) {
@@ -139,7 +112,7 @@ fn movement(
                 ),
                 1.0,
             );
-            transform.translation = move_to.extend(0.0);
+            transform.translation = move_to.extend(1.0);
         }
         if keyboard_input.pressed(KeyCode::W) {
             let move_to = move_towards(
@@ -150,7 +123,7 @@ fn movement(
                 ),
                 1.0,
             );
-            transform.translation = move_to.extend(0.0);
+            transform.translation = move_to.extend(1.0);
         }
     }
 }
