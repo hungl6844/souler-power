@@ -488,6 +488,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_physimple"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f61db22ae0e840e08bb654dbac0af89876cd3e8cb41ba208e7d6f2bf4e9f3508"
+dependencies = [
+ "bevy",
+ "serde",
+]
+
+[[package]]
 name = "bevy_reflect"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2607,6 +2617,8 @@ name = "souler-power"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_physimple",
+ "rand",
 ]
 
 [[package]]
