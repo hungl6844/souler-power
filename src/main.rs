@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::sprite::collide_aabb::*;
 use rand::prelude::*;
+use std::time::Duration;
 
 mod texture;
 
@@ -21,6 +22,12 @@ struct Walls;
 #[derive(Component)]
 struct Soul {
     visible: bool,
+    first_collect: bool,
+}
+
+#[derive(Component)]
+struct GameTimer {
+    game_over: bool,
 }
 
 const PLAYER_SPEED: f32 = 2.0;
@@ -41,8 +48,9 @@ fn main() {
         .add_system(bevy::input::system::exit_on_esc_system)
         .add_system(texture::set_texture_filters_to_nearest)
         .add_system(collect)
+        .add_system(game_over)
         .add_plugins(DefaultPlugins)
-        .run()
+        .run();
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, audio: Res<Audio>) {
@@ -67,6 +75,16 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, audio: Res<Audi
         })
         .insert(Walls)
         .insert(Timer::from_seconds(60.0, true));
+    commands
+        .spawn_bundle(SpriteBundle {
+            sprite: Sprite {
+                color: Color::NONE,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Timer::from_seconds(120.0, false))
+        .insert(GameTimer { game_over: false });
 }
 fn spawn_player(
     mut commands: Commands,
@@ -106,7 +124,10 @@ fn spawn_player(
             },
             ..Default::default()
         })
-        .insert(Soul { visible: true })
+        .insert(Soul {
+            visible: true,
+            first_collect: false,
+        })
         .insert(Timer::from_seconds(0.3, true));
 }
 
@@ -218,19 +239,15 @@ fn movement(
         soul_visibility.is_visible = false;
     }
     if keyboard_input.pressed(KeyCode::A) && player.moveable_left {
-        println!("({}, {})", transform.translation.x, transform.translation.y);
         transform.translation.x -= PLAYER_SPEED;
     }
     if keyboard_input.pressed(KeyCode::D) && player.moveable_right {
-        println!("({}, {})", transform.translation.x, transform.translation.y);
         transform.translation.x += PLAYER_SPEED;
     }
     if keyboard_input.pressed(KeyCode::S) && player.moveable_down {
-        println!("({}, {})", transform.translation.x, transform.translation.y);
         transform.translation.y -= PLAYER_SPEED;
     }
     if keyboard_input.pressed(KeyCode::W) && player.moveable_up {
-        println!("({}, {})", transform.translation.x, transform.translation.y);
         transform.translation.y += PLAYER_SPEED;
     }
 }
@@ -240,32 +257,10 @@ fn follow_player(
     mut camera_positions: Query<&mut Transform, (With<Camera>, Without<Player>)>,
     windows: Res<Windows>,
     keyboard_input: Res<Input<KeyCode>>,
-    mut player_query: Query<&mut Player>,
 ) {
     let window = windows.get_primary().unwrap();
     let mut camera = camera_positions.single_mut();
     let player = player_positions.single();
-    let mut player_entity = player_query.iter_mut().next().unwrap();
-    /*if player.translation.x > 650.0 {
-        player_entity.moveable_right = false;
-    } else {
-        player_entity.moveable_right = true;
-    }
-    if player.translation.x < -650.0 {
-        player_entity.moveable_left = false;
-    } else {
-        player_entity.moveable_left = true;
-    }
-    if player.translation.y > 370.0 {
-        player_entity.moveable_up = false;
-    } else {
-        player_entity.moveable_up = true;
-    }
-    if player.translation.y < -370.0 {
-        player_entity.moveable_down = false;
-    } else {
-        player_entity.moveable_down = true;
-    }*/
 
     if (keyboard_input.pressed(KeyCode::W) || keyboard_input.pressed(KeyCode::S))
         && (distance_to(player.translation.truncate(), camera.translation.truncate())
@@ -290,22 +285,37 @@ fn collect(
     mut soul_spawn_timer: Query<&mut Timer, (With<Walls>, Without<Player>, Without<Background>)>,
     player_positions: Query<&Transform, (With<Player>, Without<Soul>)>,
     keyboard_input: Res<Input<KeyCode>>,
+    mut game_timer_query: Query<
+        &mut Timer,
+        (
+            With<GameTimer>,
+            Without<Player>,
+            Without<Soul>,
+            Without<Background>,
+            Without<Walls>,
+        ),
+    >,
+    game_timer_struct_query: Query<&GameTimer>,
+    mut soul_query: Query<&mut Soul>,
 ) {
+    let mut soul_struct = soul_query.single_mut();
+    let game_timer_struct = game_timer_struct_query.single();
+    let mut game_timer = game_timer_query.single_mut();
     let player = player_positions.single();
     let mut rng = thread_rng();
     let mut spawn_timer = soul_spawn_timer.single_mut();
     let mut soul = soul_positions.single_mut();
     let soul_locations: [Vec2; 10] = [
-        Vec2::new(-13.0, -83.0),
-        Vec2::new(583.0, -186.0),
-        Vec2::new(416.0, 323.0),
-        Vec2::new(586.0, -49.0),
+        Vec2::new(-0.0, -72.0),
+        Vec2::new(126.0, -206.0),
+        Vec2::new(366.0, 294.0),
+        Vec2::new(400.0, -49.0),
         Vec2::new(-532.0, -30.0),
-        Vec2::new(364.0, -148.0),
-        Vec2::new(262.0, 29.0),
-        Vec2::new(-422.0, 274.0),
-        Vec2::new(-26.0, -141.0),
-        Vec2::new(-86.0, 297.0),
+        Vec2::new(-64.0, -226.0),
+        Vec2::new(262.0, 20.0),
+        Vec2::new(-158.0, 242.0),
+        Vec2::new(-26.0, -138.0),
+        Vec2::new(-92.0, 284.0),
     ];
     spawn_timer.tick(time.delta());
     let mut timer = timer_query.single_mut();
@@ -314,8 +324,10 @@ fn collect(
     if timer.finished() {
         audio.play(music);
     }
-    if spawn_timer.finished() {
+    if spawn_timer.finished() && !game_timer_struct.game_over {
         soul.translation = soul_locations[rng.gen_range(0..10)].extend(0.0);
+        let elapsed = game_timer.elapsed().as_secs();
+        game_timer.set_elapsed(Duration::from_secs(elapsed - 30));
     }
     if collide(
         player.translation,
@@ -326,9 +338,37 @@ fn collect(
     .is_some()
         && keyboard_input.pressed(KeyCode::Space)
     {
-        println!("you got a soul!");
         soul.translation = soul_locations[rng.gen_range(0..10)].extend(0.0);
+        if game_timer.paused() {
+            game_timer.unpause();
+            soul_struct.first_collect = true;
+        }
     }
+}
+
+fn game_over(
+    mut timer_query: Query<&mut Timer, With<GameTimer>>,
+    time: Res<Time>,
+    mut game_timer_query: Query<&mut GameTimer>,
+    mut player_query: Query<&mut Player>,
+    soul_query: Query<&Soul>,
+) {
+    let soul = soul_query.single();
+    let mut player = player_query.single_mut();
+    let mut game_timer = game_timer_query.single_mut();
+    let mut timer = timer_query.single_mut();
+    timer.tick(time.delta());
+    if !soul.first_collect {
+        timer.pause();
+    }
+    if timer.finished() {
+        game_timer.game_over = true;
+        player.moveable_up = false;
+        player.moveable_left = false;
+        player.moveable_right = false;
+        player.moveable_down = false;
+    }
+    println!("{:.0}", (timer.duration() - timer.elapsed()).as_secs());
 }
 
 fn distance_to(point1: Vec2, point2: Vec2) -> f32 {
